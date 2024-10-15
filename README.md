@@ -1,2 +1,2 @@
 # car-repair-simulation
-Repository for queue models classes
+Repository for queueing models classes
