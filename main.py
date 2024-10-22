@@ -63,3 +63,5 @@ async def main():
 
 # Run the simulation
 asyncio.run(main())
+
+print('1')
