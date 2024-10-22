@@ -1,6 +1,20 @@
 import asyncio
 from asyncio import Queue
+from random import randrange
 
+class Car:
+    def __init__(self, id, repair_time): 
+        self.id = id
+        self.repair_time = repair_time
+        
+    async def enqueue_cars(queue, num_cars):
+        for i in range(1, num_cars + 1):
+            car = Car(i, randrange(1, 9))
+            await queue.put(car)
+            print(f"Car {car.id} added to the queue.")
+            await asyncio.sleep(0.5)  # Simulate time between cars arriving
+        
+        
 class Mechanic:
     def __init__(self, id, efficiency, work_hours):
         self.id = id
@@ -8,11 +22,11 @@ class Mechanic:
         self.work_hours = work_hours
         self.total_repairs = 0
 
-    async def repair(self, car_id, repair_time):
-        print(f"{self.id} started repairing car {car_id}. it will take {repair_time} hours.")
-        await asyncio.sleep(repair_time)  # Simulate time taken to repair
-        self.work_hours = self.work_hours - repair_time
-        print(f"{self.id} finished repairing car {car_id}. it took {repair_time} hours.")
+    async def repair(self, car):
+        print(f"{self.id} started repairing car {car.id}. it will take {car.repair_time} hours.")
+        await asyncio.sleep(car.repair_time)  # Simulate time taken to repair
+        self.work_hours = self.work_hours - car.repair_time
+        print(f"{self.id} finished repairing car {car.id}. it took {car.repair_time} hours.")
         self.total_repairs += 1
     
     async def work(self, queue: Queue):
@@ -21,19 +35,20 @@ class Mechanic:
         while asyncio.get_event_loop().time() < end_time:
             if queue.empty():
                 print(f"{self.id} is waiting for cars to repair.")
-                await asyncio.sleep(1)  # Wait before checking again
+                await asyncio.sleep(0.5)  # Wait before checking again
                 continue
 
-            car_id = await queue.get()  # Dequeue a car
-            await self.repair(car_id, self.efficiency)  # Repair the dequeued car
+            car = await queue.get()  # Dequeue a car
+            await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
 
         print(f"{self.id} is done for the day. Total repairs: {self.total_repairs}")
 
 async def enqueue_cars(queue: Queue, num_cars: int):
-    for car_id in range(1, num_cars + 1):
-        await queue.put(car_id)
-        print(f"Car {car_id} added to the queue.")
+    for i in range(1, num_cars + 1):
+        car = Car(i, randrange(1, 9))
+        await queue.put(car)
+        print(f"Car {car.id} added to the queue.")
         await asyncio.sleep(0.5)  # Simulate time between cars arriving
 
 async def main():
