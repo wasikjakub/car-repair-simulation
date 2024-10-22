@@ -23,8 +23,8 @@ class Mechanic:
         self.total_repairs = 0
 
     async def repair(self, car):
-        print(f"{self.id} started repairing car {car.id}. it will take {car.repair_time} hours.")
-        await asyncio.sleep(car.repair_time)  # Simulate time taken to repair
+        print(f"{self.id} started repairing car {car.id}. it will take {car.repair_time / self.efficiency} hours.")
+        await asyncio.sleep(car.repair_time / self.efficiency)  # Simulate time taken to repair
         self.work_hours = self.work_hours - car.repair_time
         print(f"{self.id} finished repairing car {car.id}. it took {car.repair_time} hours.")
         self.total_repairs += 1
@@ -44,13 +44,6 @@ class Mechanic:
 
         print(f"{self.id} is done for the day. Total repairs: {self.total_repairs}")
 
-async def enqueue_cars(queue: Queue, num_cars: int):
-    for i in range(1, num_cars + 1):
-        car = Car(i, randrange(1, 9))
-        await queue.put(car)
-        print(f"Car {car.id} added to the queue.")
-        await asyncio.sleep(0.5)  # Simulate time between cars arriving
-
 async def main():
     car_queue = Queue()  # Create a shared queue for cars
     num_cars = 10  # Total number of cars arriving for repair
@@ -61,7 +54,7 @@ async def main():
 
     # Start the enqueue and mechanic processes concurrently
     await asyncio.gather(
-        enqueue_cars(car_queue, num_cars),
+        Car.enqueue_cars(car_queue, num_cars),
         mechanic1.work(car_queue),
         mechanic2.work(car_queue)
     )
