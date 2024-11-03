@@ -69,33 +69,36 @@ class Mechanic:
             if queue.empty():
                 print(f"Mechanic {self.id} is waiting for cars to repair.")
                 
-                await asyncio.sleep(0.5)  # Wait before checking again
+                await asyncio.sleep(0.25)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
             await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
+            await asyncio.sleep(0.5)  # Wait before checking again
 
         print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
 async def main():
     ### SIMULATION START ###
     car_queue = PriorityQueue()  # Create a shared queue for cars
-    num_cars = 20  # Total number of cars arriving for repair
+    num_cars = 10  # Total number of cars arriving for repair
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
-    mechanic1 = Mechanic(id=1, efficiency=2, work_hours=10)  # Repairs take 2 seconds, works for 20 seconds
-    mechanic2 = Mechanic(id=2, efficiency=3, work_hours=10)  # Repairs take 3 seconds, works for 15 seconds 
-    mechanics = [mechanic1, mechanic2]
+    mechanic1 = Mechanic(id=1, efficiency=2, work_hours=10)
+    mechanic2 = Mechanic(id=2, efficiency=3, work_hours=10)
+    mechanic3 = Mechanic(id=3, efficiency=1, work_hours=6)
+    mechanics = [mechanic1, mechanic2, mechanic3]
     
     # Start the enqueue and mechanic processes concurrently
     simulation_start_time = time()
     await asyncio.gather(
         Car.enqueue_cars(car_queue, num_cars),
         mechanic1.work(car_queue),
-        mechanic2.work(car_queue)
+        mechanic2.work(car_queue),
+        mechanic3.work(car_queue)
     )
 
     # The line below stops simulation so
@@ -160,7 +163,7 @@ async def main():
     ax.set_yticks(range(len(mechanics_times)))
     ax.set_yticklabels([f"Mechanic {i + 1}" for i in range(len(mechanics_times))])
     ax.set_xlabel("Time (hours)")
-    ax.set_title("Mechanic busy times")
+    ax.set_title("Mechanic schedule")
 
     plt.tight_layout()
     plt.show()
