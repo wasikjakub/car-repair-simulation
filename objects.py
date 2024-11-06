@@ -30,13 +30,13 @@ class Car:
     @staticmethod
     async def enqueue_cars(queue, num_cars):
         for i in range(1, num_cars + 1):
-            car = Car(i, randrange(1, 9), randrange(3))
+            car = Car(i, randrange(1, 2), randrange(3))
             await queue.put(car)  # Enqueue as (priority, car)
             car.set_arrival_time()
             
             print(f"Car {car.id} with {car.priority} priority added to the queue.")
             
-            await asyncio.sleep(0.5)  # Simulate time between cars arriving
+            await asyncio.sleep(0.1)  # Simulate time between cars arriving
         
         
 class Mechanic:
@@ -66,12 +66,12 @@ class Mechanic:
             if queue.empty():
                 print(f"Mechanic {self.id} is waiting for cars to repair.")
                 
-                await asyncio.sleep(0.25)  # Wait before checking again
+                await asyncio.sleep(0.1)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
             await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
-            await asyncio.sleep(0.5)  # Wait before checking again
+            await asyncio.sleep(0.1)  # Wait before checking again
 
         print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
