@@ -55,11 +55,11 @@ class Mechanic:
         print(f"Mechanic {self.id} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time / self.efficiency} hours.")
         
         await asyncio.sleep(car.repair_time / self.efficiency)  # Simulate time taken to repair
-        self.work_hours = self.work_hours - car.repair_time  
+        self.work_hours = self.work_hours - car.repair_time / self.efficiency
         
         car.set_repair_end_time()
         self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time))
-        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time} hours.")
+        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time / self.efficiency} hours.")
         self.total_repairs += 1
     
     async def work(self, queue):
@@ -68,14 +68,21 @@ class Mechanic:
         while asyncio.get_event_loop().time() < end_time:
             if queue.empty():
                 print(f"Mechanic {self.id} is waiting for cars to repair.")
-                
+                self.work_hours -= 0.25
                 await asyncio.sleep(0.25)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
+            if self.work_hours - car.repair_time / self.efficiency < -1:
+                print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+                continue
+            elif self.work_hours - car.repair_time / self.efficiency < 0:
+                print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+            
             await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
-            await asyncio.sleep(0.5)  # Wait before checking again
+            await asyncio.sleep(0.25)  # Wait before checking again
+            self.work_hours -= 0.25
 
         print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
@@ -89,8 +96,9 @@ async def main():
     # Initialize mechanics with varying efficiency (repair time) and work hours
     mechanic1 = Mechanic(id=1, efficiency=2, work_hours=10)
     mechanic2 = Mechanic(id=2, efficiency=3, work_hours=10)
-    mechanic3 = Mechanic(id=3, efficiency=1, work_hours=6)
-    mechanics = [mechanic1, mechanic2, mechanic3]
+    mechanic3 = Mechanic(id=3, efficiency=1.5, work_hours=6)
+    mechanic4 = Mechanic(id=4, efficiency=2, work_hours=8)
+    mechanics = [mechanic1, mechanic2, mechanic3, mechanic4]
     
     # Start the enqueue and mechanic processes concurrently
     simulation_start_time = time()
@@ -98,7 +106,8 @@ async def main():
         Car.enqueue_cars(car_queue, num_cars),
         mechanic1.work(car_queue),
         mechanic2.work(car_queue),
-        mechanic3.work(car_queue)
+        mechanic3.work(car_queue),
+        mechanic4.work(car_queue)
     )
 
     # The line below stops simulation so
@@ -165,6 +174,7 @@ async def main():
     ax.set_xlabel("Time (hours)")
     ax.set_title("Mechanic schedule")
 
+    plt.grid()
     plt.tight_layout()
     plt.show()
 

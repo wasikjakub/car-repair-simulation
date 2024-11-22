@@ -52,11 +52,11 @@ class Mechanic:
         print(f"Mechanic {self.id} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time / self.efficiency} hours.")
         
         await asyncio.sleep(car.repair_time / self.efficiency)  # Simulate time taken to repair
-        self.work_hours = self.work_hours - car.repair_time  
+        self.work_hours = self.work_hours - car.repair_time / self.efficiency
         
         car.set_repair_end_time()
         self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time))
-        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time} hours.")
+        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time / self.efficiency} hours.")
         self.total_repairs += 1
     
     async def work(self, queue):
@@ -67,11 +67,19 @@ class Mechanic:
                 print(f"Mechanic {self.id} is waiting for cars to repair.")
                 
                 await asyncio.sleep(0.1)  # Wait before checking again
+
                 continue
 
             car = await queue.get()  # Unpack the car
+            if self.work_hours - car.repair_time / self.efficiency < -1:
+                print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+                continue
+            elif self.work_hours - car.repair_time / self.efficiency < 0:
+                print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+            
             await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
             await asyncio.sleep(0.1)  # Wait before checking again
+
 
         print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
