@@ -33,13 +33,13 @@ class Car:
     @staticmethod
     async def enqueue_cars(queue, num_cars):
         for i in range(1, num_cars + 1):
-            car = Car(i, randrange(1, 9), randrange(3))
+            car = Car(i, randrange(1, 2), randrange(3))
             await queue.put(car)  # Enqueue as (priority, car)
             car.set_arrival_time()
             
             print(f"Car {car.id} with {car.priority} priority added to the queue.")
             
-            await asyncio.sleep(0.5)  # Simulate time between cars arriving
+            await asyncio.sleep(0.1)  # Simulate time between cars arriving
         
         
 class Mechanic:
@@ -81,24 +81,24 @@ class Mechanic:
             
             await self.repair(car)  # Repair the dequeued car
             queue.task_done()  # Mark the car as repaired
-            await asyncio.sleep(0.25)  # Wait before checking again
-            self.work_hours -= 0.25
+            await asyncio.sleep(0.1)  # Wait before checking again
+            self.work_hours -= 0.1
 
         print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
 async def main():
     ### SIMULATION START ###
     car_queue = PriorityQueue()  # Create a shared queue for cars
-    num_cars = 10  # Total number of cars arriving for repair
+    num_cars = 40  # Total number of cars arriving for repair
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
-    mechanic1 = Mechanic(id=1, efficiency=2, work_hours=10)
-    mechanic2 = Mechanic(id=2, efficiency=3, work_hours=10)
-    mechanic3 = Mechanic(id=3, efficiency=1.5, work_hours=6)
-    mechanic4 = Mechanic(id=4, efficiency=2, work_hours=8)
-    mechanics = [mechanic1, mechanic2, mechanic3, mechanic4]
+    mechanic1 = Mechanic(id=1, efficiency=2, work_hours=8)
+    mechanic2 = Mechanic(id=2, efficiency=2, work_hours=8)
+    mechanic3 = Mechanic(id=3, efficiency=2, work_hours=8)
+    # mechanic4 = Mechanic(id=4, efficiency=2, work_hours=8)
+    mechanics = [mechanic1, mechanic2, mechanic3]
     
     # Start the enqueue and mechanic processes concurrently
     simulation_start_time = time()
@@ -107,7 +107,7 @@ async def main():
         mechanic1.work(car_queue),
         mechanic2.work(car_queue),
         mechanic3.work(car_queue),
-        mechanic4.work(car_queue)
+        # mechanic4.work(car_queue)
     )
 
     # The line below stops simulation so
