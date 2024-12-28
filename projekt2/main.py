@@ -13,6 +13,7 @@ class ObjectClass(Enum):
     GREEN = auto()
     PINK = auto()
 
+
 class Car:
     def __init__(self, id): 
         self.id = id
@@ -24,11 +25,11 @@ class Car:
         self.object_class = choice(list(ObjectClass)) # 90% damage, 60% damage, 30% damage or 0 damage
         match self.object_class:
             case ObjectClass.RED:
-                self.repair_time = (randrange(3) for _ in range(3))
+                self.repair_time = [randrange(3) for _ in range(3)]
             case ObjectClass.ORANGE:
-                self.repair_time = (randrange(3) for _ in range(2))
+                self.repair_time = [randrange(3) for _ in range(2)]
             case ObjectClass.GREEN:
-                self.repair_time = (randrange(3) for _ in range(1))
+                self.repair_time = [randrange(3) for _ in range(1)]
         
     def set_arrival_time(self):
         self.arrival_time = time() 
@@ -44,23 +45,7 @@ class Car:
     def __lt__(self, other):
         return self.priority > other.priority
         
-    @staticmethod
-    async def enqueue_cars(queue, num_cars):
-        for i in range(1, num_cars + 1):
-            car = Car(i)
-            await queue.put(car)  # Enqueue as (priority, car)
-            car.set_arrival_time()
-            
-            print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
-            
-            await asyncio.sleep(0.1)  # Simulate time between cars arriving
-            
-    @staticmethod
-    async def enqueue_car(queue, car):
-        await queue.put(car)
-        print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
-        
-        
+
 class Mechanic:
     def __init__(self, id, efficiency, work_hours):
         self.id = id
@@ -71,17 +56,17 @@ class Mechanic:
 
     async def repair(self, car):
         car.set_queue_duration()
-        print(f"Mechanic {self.id} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time / self.efficiency} hours.")
+        print(f"Mechanic {self.id} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time[-1] / self.efficiency} hours.")
         
-        await asyncio.sleep(car.repair_time / self.efficiency)  # Simulate time taken to repair
-        self.work_hours = self.work_hours - car.repair_time / self.efficiency
+        await asyncio.sleep(car.repair_time[-1] / self.efficiency)  # Simulate time taken to repair
+        self.work_hours = self.work_hours - car.repair_time[-1] / self.efficiency
         
         car.set_repair_end_time()
         self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time))
-        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time / self.efficiency} hours.")
+        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time.pop() / self.efficiency} hours.")
         self.total_repairs += 1
     
-    async def work(self, queue, parking_type):
+    async def work(self, queue, parking_type, **queues):
         # Mechanic works until their work hours run out or the queue is empty
         if parking_type == 'parking':
             end_time = asyncio.get_event_loop().time() + self.work_hours
@@ -98,21 +83,11 @@ class Mechanic:
                         if random() < 0.2:
                             print(f"Car {self.id} is destroyed.")
                             queue.task_done()
-                            continue
                         else:
-                            Car.enqueue_car(warsztat_queue, car)
+                            enqueue_car(queues['warsztat_queue'], car)
                     case ObjectClass.PINK:
                         print(f"Car {self.id} does not need repair")
-                        continue
-                         
-                if self.work_hours - car.repair_time / self.efficiency < -1:
-                    print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
-                    continue
-                elif self.work_hours - car.repair_time / self.efficiency < 0:
-                    print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
                 
-                await self.repair(car)  # Repair the dequeued car
-                queue.task_done()  # Mark the car as repaired
                 await asyncio.sleep(0.1)  # Wait before checking again
                 self.work_hours -= 0.1
             
@@ -126,11 +101,11 @@ class Mechanic:
                     continue
 
                 car = await queue.get()  # Unpack the car
-                if self.work_hours - car.repair_time / self.efficiency < -1:
-                    print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+                if self.work_hours - car.repair_time[-1] / self.efficiency < -1:
+                    print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
                     continue
-                elif self.work_hours - car.repair_time / self.efficiency < 0:
-                    print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time / self.efficiency)} hours overtime.")
+                elif self.work_hours - car.repair_time[-1] / self.efficiency < 0:
+                    print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
                 
                 await self.repair(car)  # Repair the dequeued car
                 queue.task_done()  # Mark the car as repaired
@@ -138,6 +113,23 @@ class Mechanic:
                 self.work_hours -= 0.1
                 
             print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
+
+
+@staticmethod
+async def enqueue_cars(queue, num_cars):
+    for i in range(1, num_cars + 1):
+        car = Car(i)
+        await queue.put(car)  # Enqueue as (priority, car)
+        car.set_arrival_time()
+        
+        print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
+        
+        await asyncio.sleep(0.1)  # Simulate time between cars arriving
+        
+@staticmethod
+async def enqueue_car(queue, car):
+    await queue.put(car)
+    print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
             
 
 async def main():
@@ -153,7 +145,7 @@ async def main():
     mechanic_data = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
-    parking = Mechanic(id=0, efficiency=2, work_hours=40)
+    parking = Mechanic(id=0, efficiency=2, work_hours=10)
     warsztat1 = Mechanic(id=1, efficiency=2, work_hours=8)
     lakiernik1 = Mechanic(id=2, efficiency=2, work_hours=8)
     elektromechanik1 = Mechanic(id=3, efficiency=2, work_hours=8)
@@ -164,8 +156,8 @@ async def main():
     # Start the enqueue and mechanic processes concurrently
     simulation_start_time = time()
     await asyncio.gather(
-        Car.enqueue_cars(parking_queue, num_cars),
-        parking.work(parking_queue, parking_type='parking'),
+        enqueue_cars(parking_queue, num_cars),
+        parking.work(parking_queue, parking_type='parking', warsztat_queue=warsztat_queue),
         warsztat1.work(warsztat_queue, parking_type='warsztat'),
         lakiernik1.work(lakiernik_queue, parking_type='lakiernik'),
         elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik'),
