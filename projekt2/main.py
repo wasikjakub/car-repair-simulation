@@ -80,12 +80,39 @@ class Mechanic:
                 car = await queue.get()  # Unpack the car
                 match car.object_class:
                     case ObjectClass.RED:
+                        queue.task_done()
                         if random() < 0.2:
                             print(f"Car {self.id} is destroyed.")
-                            queue.task_done()
                         else:
                             enqueue_car(queues['warsztat_queue'], car)
+                    case ObjectClass.ORANGE:
+                        queue.task_done()
+                        if random() < 0.5:                   
+                            enqueue_car(queues['warsztat_queue'], car)
+                        elif random() < 0.7:
+                            enqueue_car(queues['elektromechanik_queue'], car)
+                        elif random() < 0.9:
+                            enqueue_car(queues['wulkanizator_queue'], car)
+                        else:
+                            enqueue_car(queues['lakiernik_queue'], car)
+                    case ObjectClass.GREEN:
+                        queue.task_done()
+                        if random() < 0.3:
+                            enqueue_car(queues['warsztat_queue'], car)
+                        elif random() < 0.55:
+                            queue.task_done()
+                            enqueue_car(queues['elektromechanik_queue'], car)
+                        elif random() < 0.7:
+                            queue.task_done()
+                            enqueue_car(queues['wulkanizator_queue'], car)
+                        elif random() < 0.95:
+                            queue.task_done()
+                            enqueue_car(queues['lakiernik_queue'], car)
+                        else:
+                            queue.task_done()
+                            enqueue_car(queues['tapicer_queue'], car)
                     case ObjectClass.PINK:
+                        queue.task_done()
                         print(f"Car {self.id} does not need repair")
                 
                 await asyncio.sleep(0.1)  # Wait before checking again
@@ -108,9 +135,62 @@ class Mechanic:
                     print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
                 
                 await self.repair(car)  # Repair the dequeued car
-                queue.task_done()  # Mark the car as repaired
                 await asyncio.sleep(0.1)  # Wait before checking again
                 self.work_hours -= 0.1
+                
+                match parking_type:
+                    case 'warsztat':
+                        match car.object_class:
+                            case ObjectClass.RED:
+                                queue.task_done()
+                                car.object_class = ObjectClass.ORANGE
+                                if random() < 0.4:                       
+                                    enqueue_car(queues['lakiernik_queue'], car)
+                                elif random() < 0.7:
+                                    enqueue_car(queues['elektromechanik_queue'], car)
+                                else:
+                                    enqueue_car(queues['wulkanizator_queue'], car)
+                            case ObjectClass.ORANGE:
+                                pass
+                                # BRAKUJE NA WYKRESIE TRZEBA BEDZIE ZMIENIC
+                            case ObjectClass.GREEN:
+                                queue.task_done()
+                    case 'lakiernik':
+                        match car.object_class:
+                            case ObjectClass.ORANGE:
+                                queue.task_done()
+                                car.object_class = ObjectClass.GREEN
+                                enqueue_car(queues['tapicer_queue'], car)
+                            case ObjectClass.GREEN:
+                                queue.task_done()
+                    case 'elektromechanik':
+                        match car.object_class:
+                            case ObjectClass.ORANGE:
+                                queue.task_done()
+                                car.object_class = ObjectClass.GREEN
+                                if random() < 0.5:
+                                    enqueue_car(queues['wulkanizator_queue'], car)
+                                elif random() < 0.9:
+                                    enqueue_car(queues['elektromechanik_queue'], car)
+                                else:
+                                    enqueue_car(queues['tapicer_queue'], car)
+                            case ObjectClass.GREEN:
+                                queue.task_done()
+                    case 'wulkanizator':
+                        match car.object_class:
+                            case ObjectClass.ORANGE:
+                                queue.task_done()
+                                car.object_class = ObjectClass.GREEN
+                                if random() < 0.7:
+                                    enqueue_car(queues['lakiernik_queue'], car)
+                                else:
+                                    enqueue_car(queues['tapicer_queue'], car)
+                            case ObjectClass.GREEN:
+                                queue.task_done()
+                    case 'tapicer':
+                        queue.task_done()
+                                
+                        
                 
             print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
@@ -157,11 +237,11 @@ async def main():
     simulation_start_time = time()
     await asyncio.gather(
         enqueue_cars(parking_queue, num_cars),
-        parking.work(parking_queue, parking_type='parking', warsztat_queue=warsztat_queue),
-        warsztat1.work(warsztat_queue, parking_type='warsztat'),
-        lakiernik1.work(lakiernik_queue, parking_type='lakiernik'),
-        elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik'),
-        wulkanizator1.work(wulkanizator_queue, parking_type='wulkanizator'),
+        parking.work(parking_queue, parking_type='parking', warsztat_queue=warsztat_queue, elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
+        warsztat1.work(warsztat_queue, parking_type='warsztat', elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue),
+        lakiernik1.work(lakiernik_queue, parking_type='lakiernik', tapicer_queue='tapicer_queue'),
+        elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik', wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
+        wulkanizator1.work(wulkanizator_queue, parking_type='wulkanizator', lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         tapicer1.work(tapicer_queue, parking_type='tapicer')
     )
 
