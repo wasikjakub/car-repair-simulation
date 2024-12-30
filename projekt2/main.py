@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import PriorityQueue
+from asyncio import PriorityQueue, Queue
 from random import randrange, choice, random
 from time import time
 import matplotlib.pyplot as plt
@@ -73,8 +73,8 @@ class Mechanic:
             while asyncio.get_event_loop().time() < end_time:
                 if queue.empty():
                     print(f"Parking is waiting for cars.")
-                    self.work_hours -= 0.1
-                    await asyncio.sleep(0.1)  # Wait before checking again
+                    self.work_hours -= 1
+                    await asyncio.sleep(1)  # Wait before checking again
                     continue
 
                 car = await queue.get()  # Unpack the car
@@ -88,29 +88,25 @@ class Mechanic:
                     case ObjectClass.ORANGE:
                         queue.task_done()
                         if random() < 0.5:                   
-                            enqueue_car(queues['warsztat_queue'], car)
+                            await enqueue_car(queues['warsztat_queue'], car)
                         elif random() < 0.7:
-                            enqueue_car(queues['elektromechanik_queue'], car)
+                            await enqueue_car(queues['elektromechanik_queue'], car)
                         elif random() < 0.9:
-                            enqueue_car(queues['wulkanizator_queue'], car)
+                            await enqueue_car(queues['wulkanizator_queue'], car)
                         else:
-                            enqueue_car(queues['lakiernik_queue'], car)
+                            await enqueue_car(queues['lakiernik_queue'], car)
                     case ObjectClass.GREEN:
                         queue.task_done()
                         if random() < 0.3:
-                            enqueue_car(queues['warsztat_queue'], car)
+                            await enqueue_car(queues['warsztat_queue'], car)
                         elif random() < 0.55:
-                            queue.task_done()
-                            enqueue_car(queues['elektromechanik_queue'], car)
+                            await enqueue_car(queues['elektromechanik_queue'], car)
                         elif random() < 0.7:
-                            queue.task_done()
-                            enqueue_car(queues['wulkanizator_queue'], car)
+                            await enqueue_car(queues['wulkanizator_queue'], car)
                         elif random() < 0.95:
-                            queue.task_done()
-                            enqueue_car(queues['lakiernik_queue'], car)
+                            await enqueue_car(queues['lakiernik_queue'], car)
                         else:
-                            queue.task_done()
-                            enqueue_car(queues['tapicer_queue'], car)
+                            await enqueue_car(queues['tapicer_queue'], car)
                     case ObjectClass.PINK:
                         queue.task_done()
                         print(f"Car {self.id} does not need repair")
@@ -145,52 +141,61 @@ class Mechanic:
                                 queue.task_done()
                                 car.object_class = ObjectClass.ORANGE
                                 if random() < 0.4:                       
-                                    enqueue_car(queues['lakiernik_queue'], car)
+                                    await enqueue_car(queues['lakiernik_queue'], car)
                                 elif random() < 0.7:
-                                    enqueue_car(queues['elektromechanik_queue'], car)
+                                    await enqueue_car(queues['elektromechanik_queue'], car)
                                 else:
-                                    enqueue_car(queues['wulkanizator_queue'], car)
+                                    await enqueue_car(queues['wulkanizator_queue'], car)
                             case ObjectClass.ORANGE:
-                                pass
                                 # BRAKUJE NA WYKRESIE TRZEBA BEDZIE ZMIENIC
+                                queue.task_done()
+                                car.object_class = ObjectClass.GREEN
+                                if random() < 0.5:
+                                    await enqueue_car(queues['elektromechanik_queue'], car)
+                                else:
+                                    await enqueue_car(queues['wulkanizator_queue'], car)
                             case ObjectClass.GREEN:
                                 queue.task_done()
+                                car.object_class = ObjectClass.PINK
                     case 'lakiernik':
                         match car.object_class:
                             case ObjectClass.ORANGE:
                                 queue.task_done()
                                 car.object_class = ObjectClass.GREEN
-                                enqueue_car(queues['tapicer_queue'], car)
+                                await enqueue_car(queues['tapicer_queue'], car)
                             case ObjectClass.GREEN:
                                 queue.task_done()
+                                car.object_class = ObjectClass.PINK
                     case 'elektromechanik':
                         match car.object_class:
                             case ObjectClass.ORANGE:
                                 queue.task_done()
                                 car.object_class = ObjectClass.GREEN
                                 if random() < 0.5:
-                                    enqueue_car(queues['wulkanizator_queue'], car)
+                                    await enqueue_car(queues['wulkanizator_queue'], car)
                                 elif random() < 0.9:
-                                    enqueue_car(queues['elektromechanik_queue'], car)
+                                    await enqueue_car(queues['lakiernik_queue'], car)
                                 else:
-                                    enqueue_car(queues['tapicer_queue'], car)
+                                    await enqueue_car(queues['tapicer_queue'], car)
                             case ObjectClass.GREEN:
                                 queue.task_done()
+                                car.object_class = ObjectClass.PINK
                     case 'wulkanizator':
                         match car.object_class:
                             case ObjectClass.ORANGE:
                                 queue.task_done()
                                 car.object_class = ObjectClass.GREEN
                                 if random() < 0.7:
-                                    enqueue_car(queues['lakiernik_queue'], car)
+                                    await enqueue_car(queues['lakiernik_queue'], car)
                                 else:
-                                    enqueue_car(queues['tapicer_queue'], car)
+                                    await enqueue_car(queues['tapicer_queue'], car)
                             case ObjectClass.GREEN:
                                 queue.task_done()
+                                car.object_class = ObjectClass.PINK
                     case 'tapicer':
                         queue.task_done()
-                                
-                        
+                        car.object_class = ObjectClass.PINK
+                                                      
                 
             print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
@@ -214,18 +219,18 @@ async def enqueue_car(queue, car):
 
 async def main():
     ### SIMULATION START ###
-    parking_queue = PriorityQueue()  # Create a shared queue for cars
+    parking_queue = Queue()  # Create a shared queue for cars
     warsztat_queue = PriorityQueue()
     lakiernik_queue = PriorityQueue()
     elektromechanik_queue = PriorityQueue()
     wulkanizator_queue = PriorityQueue()
     tapicer_queue = PriorityQueue()
-    num_cars = 40  # Total number of cars arriving for repair
+    num_cars = 20  # Total number of cars arriving for repair
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
-    parking = Mechanic(id=0, efficiency=2, work_hours=10)
+    parking = Mechanic(id=0, efficiency=2, work_hours=20)
     warsztat1 = Mechanic(id=1, efficiency=2, work_hours=8)
     lakiernik1 = Mechanic(id=2, efficiency=2, work_hours=8)
     elektromechanik1 = Mechanic(id=3, efficiency=2, work_hours=8)
