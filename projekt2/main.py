@@ -6,12 +6,16 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import matplotlib.dates as mdates
 from enum import Enum, auto
+from colorama import Fore
 
 class ObjectClass(Enum):
     RED = auto()
     ORANGE = auto()
     GREEN = auto()
     PINK = auto()
+    
+    def __str__(self):
+        return self.name
 
 
 class Car:
@@ -25,11 +29,11 @@ class Car:
         self.object_class = choice(list(ObjectClass)) # 90% damage, 60% damage, 30% damage or 0 damage
         match self.object_class:
             case ObjectClass.RED:
-                self.repair_time = [randrange(3) for _ in range(3)]
+                self.repair_time = [randrange(1, 4) for _ in range(3)]
             case ObjectClass.ORANGE:
-                self.repair_time = [randrange(3) for _ in range(2)]
+                self.repair_time = [randrange(1, 4) for _ in range(2)]
             case ObjectClass.GREEN:
-                self.repair_time = [randrange(3) for _ in range(1)]
+                self.repair_time = [randrange(1, 4) for _ in range(1)]
         
     def set_arrival_time(self):
         self.arrival_time = time() 
@@ -45,159 +49,163 @@ class Car:
     def __lt__(self, other):
         return self.priority > other.priority
         
+        
+class Parking:
+    def __init__(self, max_num_cars):
+        self.max_num_cars = max_num_cars
+        
+    async def work(self, queue, **queues):
+        last_car_id = 0
+        while last_car_id < self.max_num_cars:
+            if queue.empty():
+                await asyncio.sleep(0.5)  # Wait before checking again
+                continue
+
+            car = await queue.get()  # Unpack the car
+            last_car_id = car.id
+            match car.object_class:
+                case ObjectClass.RED:
+                    queue.task_done()
+                    if random() < 0.2:
+                        print(f"Car {car.id} is destroyed.")
+                    else:
+                        await enqueue_car(queues['warsztat_queue'], car)
+                case ObjectClass.ORANGE:
+                    queue.task_done()
+                    if random() < 0.5:                   
+                        await enqueue_car(queues['warsztat_queue'], car)
+                    elif random() < 0.7:
+                        await enqueue_car(queues['elektromechanik_queue'], car)
+                    elif random() < 0.9:
+                        await enqueue_car(queues['wulkanizator_queue'], car)
+                    else:
+                        await enqueue_car(queues['lakiernik_queue'], car)
+                case ObjectClass.GREEN:
+                    queue.task_done()
+                    if random() < 0.3:
+                        await enqueue_car(queues['warsztat_queue'], car)
+                    elif random() < 0.55:
+                        await enqueue_car(queues['elektromechanik_queue'], car)
+                    elif random() < 0.7:
+                        await enqueue_car(queues['wulkanizator_queue'], car)
+                    elif random() < 0.95:
+                        await enqueue_car(queues['lakiernik_queue'], car)
+                    else:
+                        await enqueue_car(queues['tapicer_queue'], car)
+                case ObjectClass.PINK:
+                    queue.task_done()
+                    print(Fore.MAGENTA + f"Car {car.id} does not need repair")  
+
 
 class Mechanic:
-    def __init__(self, id, efficiency, work_hours):
+    def __init__(self, id, efficiency, work_hours, name):
         self.id = id
         self.efficiency = efficiency
         self.work_hours = work_hours
+        self.name = name
         self.total_repairs = 0
         self.spent_times = []  # List to store the spent times in queues for cars repaired by this mechanic
 
     async def repair(self, car):
         car.set_queue_duration()
-        print(f"Mechanic {self.id} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time[-1] / self.efficiency} hours.")
+        print(Fore.YELLOW + f"{self.name} started repairing car {car.id} with {car.priority} priority. It will take {car.repair_time[-1] / self.efficiency} hours.")
         
         await asyncio.sleep(car.repair_time[-1] / self.efficiency)  # Simulate time taken to repair
         self.work_hours = self.work_hours - car.repair_time[-1] / self.efficiency
         
         car.set_repair_end_time()
         self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time))
-        print(f"Mechanic {self.id} finished repairing car {car.id}. It took {car.repair_time.pop() / self.efficiency} hours.")
+        print(Fore.GREEN + f"{self.name} finished repairing car {car.id}. It took {car.repair_time.pop() / self.efficiency} hours.")
         self.total_repairs += 1
     
     async def work(self, queue, parking_type, **queues):
         # Mechanic works until their work hours run out or the queue is empty
-        if parking_type == 'parking':
-            end_time = asyncio.get_event_loop().time() + self.work_hours
-            while asyncio.get_event_loop().time() < end_time:
-                if queue.empty():
-                    print(f"Parking is waiting for cars.")
-                    self.work_hours -= 1
-                    await asyncio.sleep(1)  # Wait before checking again
-                    continue
-
-                car = await queue.get()  # Unpack the car
-                match car.object_class:
-                    case ObjectClass.RED:
-                        queue.task_done()
-                        if random() < 0.2:
-                            print(f"Car {self.id} is destroyed.")
-                        else:
-                            enqueue_car(queues['warsztat_queue'], car)
-                    case ObjectClass.ORANGE:
-                        queue.task_done()
-                        if random() < 0.5:                   
-                            await enqueue_car(queues['warsztat_queue'], car)
-                        elif random() < 0.7:
-                            await enqueue_car(queues['elektromechanik_queue'], car)
-                        elif random() < 0.9:
-                            await enqueue_car(queues['wulkanizator_queue'], car)
-                        else:
-                            await enqueue_car(queues['lakiernik_queue'], car)
-                    case ObjectClass.GREEN:
-                        queue.task_done()
-                        if random() < 0.3:
-                            await enqueue_car(queues['warsztat_queue'], car)
-                        elif random() < 0.55:
-                            await enqueue_car(queues['elektromechanik_queue'], car)
-                        elif random() < 0.7:
-                            await enqueue_car(queues['wulkanizator_queue'], car)
-                        elif random() < 0.95:
-                            await enqueue_car(queues['lakiernik_queue'], car)
-                        else:
-                            await enqueue_car(queues['tapicer_queue'], car)
-                    case ObjectClass.PINK:
-                        queue.task_done()
-                        print(f"Car {self.id} does not need repair")
-                
-                await asyncio.sleep(0.1)  # Wait before checking again
+        end_time = asyncio.get_event_loop().time() + self.work_hours
+        while asyncio.get_event_loop().time() < end_time:
+            if queue.empty():
+                # print(f"Mechanic {self.id} is waiting for cars to repair.")
                 self.work_hours -= 0.1
+                await asyncio.sleep(0.1)  # Wait before checking again
+                continue
+
+            car = await queue.get()  # Unpack the car
+            if self.work_hours - car.repair_time[-1] / self.efficiency < -1:
+                print(Fore.RED + f"{self.name} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
+                continue
+            elif self.work_hours - car.repair_time[-1] / self.efficiency < 0:
+                print(Fore.YELLOW + f"{self.name} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
             
-        else:
-            end_time = asyncio.get_event_loop().time() + self.work_hours
-            while asyncio.get_event_loop().time() < end_time:
-                if queue.empty():
-                    print(f"Mechanic {self.id} is waiting for cars to repair.")
-                    self.work_hours -= 0.1
-                    await asyncio.sleep(0.1)  # Wait before checking again
-                    continue
-
-                car = await queue.get()  # Unpack the car
-                if self.work_hours - car.repair_time[-1] / self.efficiency < -1:
-                    print(f"Mechanic {self.id} will not repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
-                    continue
-                elif self.work_hours - car.repair_time[-1] / self.efficiency < 0:
-                    print(f"Mechanic {self.id} will repair car {car.id}. It takes {-(self.work_hours - car.repair_time[-1] / self.efficiency)} hours overtime.")
-                
-                await self.repair(car)  # Repair the dequeued car
-                await asyncio.sleep(0.1)  # Wait before checking again
-                self.work_hours -= 0.1
-                
-                match parking_type:
-                    case 'warsztat':
-                        match car.object_class:
-                            case ObjectClass.RED:
-                                queue.task_done()
-                                car.object_class = ObjectClass.ORANGE
-                                if random() < 0.4:                       
-                                    await enqueue_car(queues['lakiernik_queue'], car)
-                                elif random() < 0.7:
-                                    await enqueue_car(queues['elektromechanik_queue'], car)
-                                else:
-                                    await enqueue_car(queues['wulkanizator_queue'], car)
-                            case ObjectClass.ORANGE:
-                                # BRAKUJE NA WYKRESIE TRZEBA BEDZIE ZMIENIC
-                                queue.task_done()
-                                car.object_class = ObjectClass.GREEN
-                                if random() < 0.5:
-                                    await enqueue_car(queues['elektromechanik_queue'], car)
-                                else:
-                                    await enqueue_car(queues['wulkanizator_queue'], car)
-                            case ObjectClass.GREEN:
-                                queue.task_done()
-                                car.object_class = ObjectClass.PINK
-                    case 'lakiernik':
-                        match car.object_class:
-                            case ObjectClass.ORANGE:
-                                queue.task_done()
-                                car.object_class = ObjectClass.GREEN
+            await self.repair(car)  # Repair the dequeued car
+            await asyncio.sleep(0.1)  # Wait before checking again
+            self.work_hours -= 0.1
+            
+            match parking_type:
+                case 'warsztat':
+                    match car.object_class:
+                        case ObjectClass.RED:
+                            queue.task_done()
+                            car.object_class = ObjectClass.ORANGE
+                            if random() < 0.4:                       
+                                await enqueue_car(queues['lakiernik_queue'], car)
+                            elif random() < 0.7:
+                                await enqueue_car(queues['elektromechanik_queue'], car)
+                            else:
+                                await enqueue_car(queues['wulkanizator_queue'], car)
+                        case ObjectClass.ORANGE:
+                            # BRAKUJE NA WYKRESIE - TRZEBA BEDZIE ZMIENIC
+                            queue.task_done()
+                            car.object_class = ObjectClass.GREEN
+                            if random() < 0.5:
+                                await enqueue_car(queues['elektromechanik_queue'], car)
+                            else:
+                                await enqueue_car(queues['wulkanizator_queue'], car)
+                        case ObjectClass.GREEN:
+                            queue.task_done()
+                            car.object_class = ObjectClass.PINK
+                            print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                case 'lakiernik':
+                    match car.object_class:
+                        case ObjectClass.ORANGE:
+                            queue.task_done()
+                            car.object_class = ObjectClass.GREEN
+                            await enqueue_car(queues['tapicer_queue'], car)
+                        case ObjectClass.GREEN:
+                            queue.task_done()
+                            car.object_class = ObjectClass.PINK
+                            print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                case 'elektromechanik':
+                    match car.object_class:
+                        case ObjectClass.ORANGE:
+                            queue.task_done()
+                            car.object_class = ObjectClass.GREEN
+                            if random() < 0.5:
+                                await enqueue_car(queues['wulkanizator_queue'], car)
+                            elif random() < 0.9:
+                                await enqueue_car(queues['lakiernik_queue'], car)
+                            else:
                                 await enqueue_car(queues['tapicer_queue'], car)
-                            case ObjectClass.GREEN:
-                                queue.task_done()
-                                car.object_class = ObjectClass.PINK
-                    case 'elektromechanik':
-                        match car.object_class:
-                            case ObjectClass.ORANGE:
-                                queue.task_done()
-                                car.object_class = ObjectClass.GREEN
-                                if random() < 0.5:
-                                    await enqueue_car(queues['wulkanizator_queue'], car)
-                                elif random() < 0.9:
-                                    await enqueue_car(queues['lakiernik_queue'], car)
-                                else:
-                                    await enqueue_car(queues['tapicer_queue'], car)
-                            case ObjectClass.GREEN:
-                                queue.task_done()
-                                car.object_class = ObjectClass.PINK
-                    case 'wulkanizator':
-                        match car.object_class:
-                            case ObjectClass.ORANGE:
-                                queue.task_done()
-                                car.object_class = ObjectClass.GREEN
-                                if random() < 0.7:
-                                    await enqueue_car(queues['lakiernik_queue'], car)
-                                else:
-                                    await enqueue_car(queues['tapicer_queue'], car)
-                            case ObjectClass.GREEN:
-                                queue.task_done()
-                                car.object_class = ObjectClass.PINK
-                    case 'tapicer':
-                        queue.task_done()
-                        car.object_class = ObjectClass.PINK
-                                                      
-                
-            print(f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
+                        case ObjectClass.GREEN:
+                            queue.task_done()
+                            car.object_class = ObjectClass.PINK
+                            print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                case 'wulkanizator':
+                    match car.object_class:
+                        case ObjectClass.ORANGE:
+                            queue.task_done()
+                            car.object_class = ObjectClass.GREEN
+                            if random() < 0.7:
+                                await enqueue_car(queues['lakiernik_queue'], car)
+                            else:
+                                await enqueue_car(queues['tapicer_queue'], car)
+                        case ObjectClass.GREEN:
+                            queue.task_done()
+                            car.object_class = ObjectClass.PINK
+                            print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                case 'tapicer':
+                    queue.task_done()
+                    car.object_class = ObjectClass.PINK
+                                                    
+        print(Fore.WHITE + f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
 
 
 @staticmethod
@@ -207,35 +215,43 @@ async def enqueue_cars(queue, num_cars):
         await queue.put(car)  # Enqueue as (priority, car)
         car.set_arrival_time()
         
-        print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
+        print(Fore.CYAN + f"Car {car.id} with {car.priority} priority of {car.object_class} class arrived at the parking.")
         
         await asyncio.sleep(0.1)  # Simulate time between cars arriving
         
 @staticmethod
 async def enqueue_car(queue, car):
     await queue.put(car)
-    print(f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the queue.")
-            
+    print(Fore.CYAN + f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the {queue}")
+                
+class PriorityQueue(PriorityQueue):
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.name = name
+        
+    def __str__(self):
+        return self.name
+
 
 async def main():
     ### SIMULATION START ###
     parking_queue = Queue()  # Create a shared queue for cars
-    warsztat_queue = PriorityQueue()
-    lakiernik_queue = PriorityQueue()
-    elektromechanik_queue = PriorityQueue()
-    wulkanizator_queue = PriorityQueue()
-    tapicer_queue = PriorityQueue()
-    num_cars = 20  # Total number of cars arriving for repair
+    warsztat_queue = PriorityQueue('Warsztat')
+    lakiernik_queue = PriorityQueue('Lakiernik')
+    elektromechanik_queue = PriorityQueue('Elektromechanik')
+    wulkanizator_queue = PriorityQueue('Wulkanizator')
+    tapicer_queue = PriorityQueue('Tapicer')
+    num_cars = 10  # Total number of cars arriving for repair
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
-    parking = Mechanic(id=0, efficiency=2, work_hours=20)
-    warsztat1 = Mechanic(id=1, efficiency=2, work_hours=8)
-    lakiernik1 = Mechanic(id=2, efficiency=2, work_hours=8)
-    elektromechanik1 = Mechanic(id=3, efficiency=2, work_hours=8)
-    wulkanizator1 = Mechanic(id=4, efficiency=2, work_hours=8)
-    tapicer1 = Mechanic(id=5, efficiency=2, work_hours=8)
+    parking = Parking(num_cars)
+    warsztat1 = Mechanic(id=1, efficiency=1, work_hours=16, name='Warsztat')
+    lakiernik1 = Mechanic(id=2, efficiency=1, work_hours=16, name='Lakiernik')
+    elektromechanik1 = Mechanic(id=3, efficiency=1, work_hours=16, name='Elektromechanik')
+    wulkanizator1 = Mechanic(id=4, efficiency=1, work_hours=16, name='Wulkanizator')
+    tapicer1 = Mechanic(id=5, efficiency=1, work_hours=16, name='Tapicer')
     mechanics = [warsztat1, lakiernik1, elektromechanik1, wulkanizator1, tapicer1]
     
     # Start the enqueue and mechanic processes concurrently
@@ -244,7 +260,7 @@ async def main():
         enqueue_cars(parking_queue, num_cars),
         parking.work(parking_queue, parking_type='parking', warsztat_queue=warsztat_queue, elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         warsztat1.work(warsztat_queue, parking_type='warsztat', elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue),
-        lakiernik1.work(lakiernik_queue, parking_type='lakiernik', tapicer_queue='tapicer_queue'),
+        lakiernik1.work(lakiernik_queue, parking_type='lakiernik', tapicer_queue=tapicer_queue),
         elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik', wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         wulkanizator1.work(wulkanizator_queue, parking_type='wulkanizator', lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         tapicer1.work(tapicer_queue, parking_type='tapicer')
@@ -310,7 +326,7 @@ async def main():
             
     # Customize the plot
     ax.set_yticks(range(len(mechanics_times)))
-    ax.set_yticklabels([f"Mechanic {i + 1}" for i in range(len(mechanics_times))])
+    ax.set_yticklabels([mechanic.name for mechanic in mechanics])
     ax.set_xlabel("Time (hours)")
     ax.set_title("Mechanic schedule")
 
