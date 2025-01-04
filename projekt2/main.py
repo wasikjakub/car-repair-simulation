@@ -26,7 +26,9 @@ class Car:
         self.repair_start_time = None # time when car started to be repaired
         self.repair_end_time = None # time when mechanic ended repairning
         self.spent_time = None # time spent in queue
+        self.mechanics_route = [] # stores all mechanics car went through
         self.object_class = choice(list(ObjectClass)) # 90% damage, 60% damage, 30% damage or 0 damage
+        
         match self.object_class:
             case ObjectClass.RED:
                 self.repair_time = [randrange(1, 4) for _ in range(3)]
@@ -67,7 +69,7 @@ class Parking:
                 case ObjectClass.RED:
                     queue.task_done()
                     if random() < 0.2:
-                        print(f"Car {car.id} is destroyed.")
+                        print(Fore.RED + f"Car {car.id} can not be repaired")
                     else:
                         await enqueue_car(queues['warsztat_queue'], car)
                 case ObjectClass.ORANGE:
@@ -105,6 +107,7 @@ class Mechanic:
         self.name = name
         self.total_repairs = 0
         self.spent_times = []  # List to store the spent times in queues for cars repaired by this mechanic
+        self.car_routes = []   # List to store car routes through network
 
     async def repair(self, car):
         car.set_queue_duration()
@@ -114,7 +117,7 @@ class Mechanic:
         self.work_hours = self.work_hours - car.repair_time[-1] / self.efficiency
         
         car.set_repair_end_time()
-        self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time))
+        self.spent_times.append((car.id, car.spent_time, car.priority, car.repair_start_time, car.repair_end_time, car.object_class))
         print(Fore.GREEN + f"{self.name} finished repairing car {car.id}. It took {car.repair_time.pop() / self.efficiency} hours.")
         self.total_repairs += 1
     
@@ -163,6 +166,7 @@ class Mechanic:
                             queue.task_done()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                            self.car_routes.append((car.id, car.mechanics_route))
                 case 'lakiernik':
                     match car.object_class:
                         case ObjectClass.ORANGE:
@@ -173,6 +177,7 @@ class Mechanic:
                             queue.task_done()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                            self.car_routes.append((car.id, car.mechanics_route))
                 case 'elektromechanik':
                     match car.object_class:
                         case ObjectClass.ORANGE:
@@ -188,6 +193,7 @@ class Mechanic:
                             queue.task_done()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                            self.car_routes.append((car.id, car.mechanics_route))
                 case 'wulkanizator':
                     match car.object_class:
                         case ObjectClass.ORANGE:
@@ -201,11 +207,15 @@ class Mechanic:
                             queue.task_done()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                            self.car_routes.append((car.id, car.mechanics_route))
                 case 'tapicer':
                     queue.task_done()
                     car.object_class = ObjectClass.PINK
+                    print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
+                    self.car_routes.append((car.id, car.mechanics_route))
+                
                                                     
-        print(Fore.WHITE + f"Mechanic {self.id} is done for the day. Total repairs: {self.total_repairs}")
+        print(Fore.WHITE + f"{self.name} is done for the day. Total repairs: {self.total_repairs}")
 
 
 @staticmethod
@@ -222,6 +232,7 @@ async def enqueue_cars(queue, num_cars):
 @staticmethod
 async def enqueue_car(queue, car):
     await queue.put(car)
+    car.mechanics_route.append(queue.name)
     print(Fore.CYAN + f"Car {car.id} with {car.priority} priority of {car.object_class} class added to the {queue}")
                 
 class PriorityQueue(PriorityQueue):
@@ -241,9 +252,10 @@ async def main():
     elektromechanik_queue = PriorityQueue('Elektromechanik')
     wulkanizator_queue = PriorityQueue('Wulkanizator')
     tapicer_queue = PriorityQueue('Tapicer')
-    num_cars = 10  # Total number of cars arriving for repair
+    num_cars = 15  # Total number of cars arriving for repair
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
+    car_routes = [] # array to store all cars routes
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
     parking = Parking(num_cars)
@@ -273,18 +285,29 @@ async def main():
     ####################################
     ### PROCESSING DATA FOR PLOTS (CARS) 
     for mechanic in mechanics:
-        car_data += mechanic.spent_times        
-        
-    car_ids = [car_id for car_id, _, _, _, _ in car_data]
-    times_spent = [time for _, time, _, _, _ in car_data]
-    priorities = [priority for _, _, priority, _, _ in car_data]
+        car_data += mechanic.spent_times  
+        car_routes += mechanic.car_routes           
+    print(car_routes)
+    
+    car_ids = [car_id for car_id, _, _, _, _, _ in car_data]
+    times_spent = [time for _, time, _, _, _, _ in car_data]
+    priorities = [priority for _, _, priority, _, _, _ in car_data]
+    
+    times_spent_dict = {}
+    priorities_dict = {}
+    for car_id, times, priority in zip(car_ids, times_spent, priorities):
+        if not car_id in times_spent_dict:
+            times_spent_dict[car_id] = times
+            priorities_dict[car_id] = priority
+        else:
+            times_spent_dict[car_id] += times
     
     color_map = {0: 'skyblue', 1: 'lightgreen', 2: 'salmon'}
-    colors = [color_map[priority] for priority in priorities]
+    colors = [color_map[priorities_dict[car_id]] for car_id in times_spent_dict.keys()]
 
     # Create the bar plot
     plt.figure(figsize=(10, 6))
-    plt.bar(car_ids, times_spent, color=colors)
+    plt.bar(times_spent_dict.keys(), times_spent_dict.values(), color=colors)
     plt.xlabel('Car ID')
     plt.ylabel('Time spent in queue (hours)')
     plt.title('Time spent by each car in the queue')
@@ -308,21 +331,40 @@ async def main():
     
     mechanics_id = []
     mechanics_times = []
+    car_classes = []
+    car_ids = []
 
     for i in range(0, len(mechanic_data), 2):
         mech_id = mechanic_data[i]
-        mechanic_entries = mechanic_data[i + 1]
+        mechanic_entries = mechanic_data[i + 1] 
         
         mechanics_id.append(mech_id)
-        times = [(start - simulation_start_time, end - simulation_start_time) for _, _, _, start, end in mechanic_entries]
+        times = [(start - simulation_start_time, end - simulation_start_time) for _, _, _, start, end, _ in mechanic_entries]
         mechanics_times.append(times)
         
+        cars = [car_class for _, _, _, _, _, car_class in mechanic_entries]
+        car_classes.append(cars)
+        
+        cars = [car_id for car_id, _, _, _, _, _ in mechanic_entries]
+        car_ids.append(cars) 
+    
     fig, ax = plt.subplots(figsize=(10, 5))
+    color_map = {
+        ObjectClass.RED: "red",
+        ObjectClass.ORANGE: "orange",
+        ObjectClass.GREEN: "green",
+        ObjectClass.PINK: "pink"
+    }    
+    for i, (mechanic_times, mechanic_classes, mechanic_car_ids) in enumerate(zip(mechanics_times, car_classes, car_ids)):
+        for (start, end), car_class, car_id in zip(mechanic_times, mechanic_classes, mechanic_car_ids):
+            # Get the color corresponding to the car_class
+            color = color_map[car_class]
+            # Plot the line
+            ax.plot([start, end], [i, i], color=color, linewidth=10, solid_capstyle="butt")
+            # Add the car_id as a small number next to the bar
+            mid_point = (start + end) / 2  # Calculate the midpoint of the bar
+            ax.text(mid_point, i, str(car_id), color="black", ha="center", va="center", fontsize=8)
 
-    # Plot for each mechanic
-    for i, times in enumerate(mechanics_times):
-        for start, end in times:
-            ax.plot([start, end], [i, i], color="skyblue", linewidth=10, solid_capstyle="butt")
             
     # Customize the plot
     ax.set_yticks(range(len(mechanics_times)))
