@@ -7,6 +7,7 @@ from matplotlib.patches import Patch
 import matplotlib.dates as mdates
 from enum import Enum, auto
 from colorama import Fore
+from numpy.random import exponential
 
 class ObjectClass(Enum):
     RED = auto()
@@ -26,19 +27,26 @@ class Car:
         self.repair_start_time = None # time when car started to be repaired
         self.repair_end_time = None # time when mechanic ended repairning
         self.spent_time = None # time spent in queue
+        self.end_time = None # time when car left the system
+        self.delta_time = None # time spend in system
         self.mechanics_route = [] # stores all mechanics car went through
         self.object_class = choice(list(ObjectClass)) # 90% damage, 60% damage, 30% damage or 0 damage
+        self.destroyed = False
         
         match self.object_class:
             case ObjectClass.RED:
-                self.repair_time = [randrange(1, 4) for _ in range(3)]
+                self.repair_time = [exponential(2) for _ in range(3)]
             case ObjectClass.ORANGE:
-                self.repair_time = [randrange(1, 4) for _ in range(2)]
+                self.repair_time = [exponential(2) for _ in range(2)]
             case ObjectClass.GREEN:
-                self.repair_time = [randrange(1, 4) for _ in range(1)]
+                self.repair_time = [exponential(2) for _ in range(1)]
         
     def set_arrival_time(self):
         self.arrival_time = time() 
+        
+    def set_end_time(self):
+        self.end_time = time()
+        self.delta_time = self.end_time - self.arrival_time
         
     def set_queue_duration(self):
         self.repair_start_time = time()
@@ -60,7 +68,7 @@ class Parking:
         last_car_id = 0
         while last_car_id < self.max_num_cars:
             if queue.empty():
-                await asyncio.sleep(0.5)  # Wait before checking again
+                await asyncio.sleep(0.01)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
@@ -69,6 +77,7 @@ class Parking:
                 case ObjectClass.RED:
                     queue.task_done()
                     if random() < 0.2:
+                        car.destroyed = True
                         print(Fore.RED + f"Car {car.id} can not be repaired")
                     else:
                         await enqueue_car(queues['warsztat_queue'], car)
@@ -127,8 +136,8 @@ class Mechanic:
         while asyncio.get_event_loop().time() < end_time:
             if queue.empty():
                 # print(f"Mechanic {self.id} is waiting for cars to repair.")
-                self.work_hours -= 0.1
-                await asyncio.sleep(0.1)  # Wait before checking again
+                self.work_hours -= 0.01
+                await asyncio.sleep(0.01)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
@@ -164,6 +173,7 @@ class Mechanic:
                                 await enqueue_car(queues['wulkanizator_queue'], car)
                         case ObjectClass.GREEN:
                             queue.task_done()
+                            car.set_end_time()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
                             self.car_routes.append((car.id, car.mechanics_route))
@@ -175,6 +185,7 @@ class Mechanic:
                             await enqueue_car(queues['tapicer_queue'], car)
                         case ObjectClass.GREEN:
                             queue.task_done()
+                            car.set_end_time()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
                             self.car_routes.append((car.id, car.mechanics_route))
@@ -191,6 +202,7 @@ class Mechanic:
                                 await enqueue_car(queues['tapicer_queue'], car)
                         case ObjectClass.GREEN:
                             queue.task_done()
+                            car.set_end_time()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
                             self.car_routes.append((car.id, car.mechanics_route))
@@ -205,11 +217,13 @@ class Mechanic:
                                 await enqueue_car(queues['tapicer_queue'], car)
                         case ObjectClass.GREEN:
                             queue.task_done()
+                            car.set_end_time()
                             car.object_class = ObjectClass.PINK
                             print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
                             self.car_routes.append((car.id, car.mechanics_route))
                 case 'tapicer':
                     queue.task_done()
+                    car.set_end_time()
                     car.object_class = ObjectClass.PINK
                     print(Fore.MAGENTA + f"Car {car.id} is fully repaired now")
                     self.car_routes.append((car.id, car.mechanics_route))
@@ -219,15 +233,16 @@ class Mechanic:
 
 
 @staticmethod
-async def enqueue_cars(queue, num_cars):
+async def enqueue_cars(queue, num_cars, all_cars):
     for i in range(1, num_cars + 1):
         car = Car(i)
+        all_cars.append(car)
         await queue.put(car)  # Enqueue as (priority, car)
         car.set_arrival_time()
         
         print(Fore.CYAN + f"Car {car.id} with {car.priority} priority of {car.object_class} class arrived at the parking.")
         
-        await asyncio.sleep(0.1)  # Simulate time between cars arriving
+        await asyncio.sleep(exponential(1))  # Simulate time between cars arriving
         
 @staticmethod
 async def enqueue_car(queue, car):
@@ -256,27 +271,31 @@ async def main():
     car_data = [] # array to store times of car repairs (used for plotting data) 
     mechanic_data = []
     car_routes = [] # array to store all cars routes
+    all_cars = []
 
     # Initialize mechanics with varying efficiency (repair time) and work hours
     parking = Parking(num_cars)
     warsztat1 = Mechanic(id=1, efficiency=1, work_hours=16, name='Warsztat')
+    warsztat2 = Mechanic(id=6, efficiency=1, work_hours=8, name='Warsztat2')
     lakiernik1 = Mechanic(id=2, efficiency=1, work_hours=16, name='Lakiernik')
     elektromechanik1 = Mechanic(id=3, efficiency=1, work_hours=16, name='Elektromechanik')
     wulkanizator1 = Mechanic(id=4, efficiency=1, work_hours=16, name='Wulkanizator')
     tapicer1 = Mechanic(id=5, efficiency=1, work_hours=16, name='Tapicer')
-    mechanics = [warsztat1, lakiernik1, elektromechanik1, wulkanizator1, tapicer1]
+    mechanics = [warsztat1, lakiernik1, elektromechanik1, wulkanizator1, tapicer1, warsztat2]
     
     # Start the enqueue and mechanic processes concurrently
     simulation_start_time = time()
     await asyncio.gather(
-        enqueue_cars(parking_queue, num_cars),
+        enqueue_cars(parking_queue, num_cars, all_cars),
         parking.work(parking_queue, parking_type='parking', warsztat_queue=warsztat_queue, elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         warsztat1.work(warsztat_queue, parking_type='warsztat', elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue),
+        warsztat2.work(warsztat_queue, parking_type='warsztat', elektromechanik_queue=elektromechanik_queue, wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue),
         lakiernik1.work(lakiernik_queue, parking_type='lakiernik', tapicer_queue=tapicer_queue),
         elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik', wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         wulkanizator1.work(wulkanizator_queue, parking_type='wulkanizator', lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         tapicer1.work(tapicer_queue, parking_type='tapicer')
     )
+    simulation_end_time = time()
 
     # The line below stops simulation so
     # await car_queue.join()  # Ensure all cars are processed  
@@ -289,30 +308,31 @@ async def main():
         car_routes += mechanic.car_routes           
     print(car_routes)
     
-    car_ids = [car_id for car_id, _, _, _, _, _ in car_data]
-    times_spent = [time for _, time, _, _, _, _ in car_data]
-    priorities = [priority for _, _, priority, _, _, _ in car_data]
-    
-    times_spent_dict = {}
-    priorities_dict = {}
-    for car_id, times, priority in zip(car_ids, times_spent, priorities):
-        if not car_id in times_spent_dict:
-            times_spent_dict[car_id] = times
-            priorities_dict[car_id] = priority
+    # Extract car details
+    car_ids = [car.id for car in all_cars]
+    times_spent = []
+    for car in all_cars:    
+        if car.delta_time and not car.destroyed:
+            times_spent.append(car.delta_time)
+        elif car.delta_time is None and car.object_class is not ObjectClass.PINK and not car.destroyed:
+            times_spent.append(simulation_end_time - car.arrival_time)
         else:
-            times_spent_dict[car_id] += times
-    
+            times_spent.append(0)
+    priorities = [car.priority for car in all_cars]
+
+    # Map priorities to colors
     color_map = {0: 'skyblue', 1: 'lightgreen', 2: 'salmon'}
-    colors = [color_map[priorities_dict[car_id]] for car_id in times_spent_dict.keys()]
+    colors = [color_map[priority] for priority in priorities]  # Fixed line
 
     # Create the bar plot
     plt.figure(figsize=(10, 6))
-    plt.bar(times_spent_dict.keys(), times_spent_dict.values(), color=colors)
+    plt.bar(car_ids, times_spent, color=colors)
     plt.xlabel('Car ID')
-    plt.ylabel('Time spent in queue (hours)')
-    plt.title('Time spent by each car in the queue')
+    plt.ylabel('Time spent in system (hours)')
+    plt.title('Time spent by each car in the system')
     plt.xticks(car_ids)  # Set x-ticks to be the car IDs
     plt.grid(axis='y')
+
     # Create legend elements
     legend_elements = [
         Patch(facecolor='skyblue', label='Low Priority (0)'),
@@ -320,6 +340,7 @@ async def main():
         Patch(facecolor='salmon', label='High Priority (2)')
     ]
     plt.legend(handles=legend_elements, title="Car Priority")
+
     # Show the plot
     plt.show()
 
