@@ -70,7 +70,8 @@ class Parking:
             if queue.empty():
                 await asyncio.sleep(0.01)  # Wait before checking again
                 continue
-
+            
+            await asyncio.sleep(exponential(0.1))
             car = await queue.get()  # Unpack the car
             last_car_id = car.id
             match car.object_class:
