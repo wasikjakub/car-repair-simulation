@@ -137,8 +137,8 @@ class Mechanic:
         while asyncio.get_event_loop().time() < end_time:
             if queue.empty():
                 # print(f"Mechanic {self.id} is waiting for cars to repair.")
-                self.work_hours -= 0.01
-                await asyncio.sleep(0.01)  # Wait before checking again
+                self.work_hours -= 0.1
+                await asyncio.sleep(0.1)  # Wait before checking again
                 continue
 
             car = await queue.get()  # Unpack the car
