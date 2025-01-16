@@ -31,6 +31,7 @@ class Car:
         self.delta_time = None # time spend in system
         self.mechanics_route = [] # stores all mechanics car went through
         self.object_class = choice(list(ObjectClass)) # 90% damage, 60% damage, 30% damage or 0 damage
+        self.original_class = self.object_class
         self.destroyed = False
         
         match self.object_class:
@@ -320,10 +321,13 @@ async def main():
         else:
             times_spent.append(0)
     priorities = [car.priority for car in all_cars]
-
+    car_classes = [car.original_class for car in all_cars]
+    
     # Map priorities to colors
     color_map = {0: 'skyblue', 1: 'lightgreen', 2: 'salmon'}
+    class_map = {ObjectClass.RED: 'red', ObjectClass.ORANGE: 'orange', ObjectClass.GREEN: 'green', ObjectClass.PINK: 'pink'}
     colors = [color_map[priority] for priority in priorities]  # Fixed line
+    colors = [class_map[car_class] for car_class in car_classes]
 
     # Create the bar plot
     plt.figure(figsize=(10, 6))
@@ -336,9 +340,9 @@ async def main():
 
     # Create legend elements
     legend_elements = [
-        Patch(facecolor='skyblue', label='Low Priority (0)'),
-        Patch(facecolor='lightgreen', label='Medium Priority (1)'),
-        Patch(facecolor='salmon', label='High Priority (2)')
+        Patch(facecolor='red', label='Red class'),
+        Patch(facecolor='orange', label='Orange class'),
+        Patch(facecolor='green', label='Green class')
     ]
     plt.legend(handles=legend_elements, title="Car Priority")
 
