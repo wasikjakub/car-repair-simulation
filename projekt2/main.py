@@ -344,7 +344,7 @@ async def main():
         Patch(facecolor='orange', label='Orange class'),
         Patch(facecolor='green', label='Green class')
     ]
-    plt.legend(handles=legend_elements, title="Car Priority")
+    plt.legend(handles=legend_elements, title="Car original class")
 
     # Show the plot
     plt.show()
