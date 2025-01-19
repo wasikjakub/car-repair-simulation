@@ -8,6 +8,7 @@ import matplotlib.dates as mdates
 from enum import Enum, auto
 from colorama import Fore
 from numpy.random import exponential
+import numpy as np
 
 class ObjectClass(Enum):
     RED = auto()
@@ -260,7 +261,6 @@ class PriorityQueue(PriorityQueue):
     def __str__(self):
         return self.name
 
-
 async def main():
     ### SIMULATION START ###
     parking_queue = Queue()  # Create a shared queue for cars
@@ -275,6 +275,13 @@ async def main():
     car_routes = [] # array to store all cars routes
     all_cars = []
 
+    queues = {
+            'Warsztat': warsztat_queue,
+            'Lakiernik': lakiernik_queue,
+            'Elektromechanik': elektromechanik_queue,
+            'Wulkanizator': wulkanizator_queue,
+            'Tapicer': tapicer_queue
+        }
     # Initialize mechanics with varying efficiency (repair time) and work hours
     parking = Parking(num_cars)
     warsztat1 = Mechanic(id=1, efficiency=1, work_hours=16, name='Warsztat')
@@ -295,7 +302,8 @@ async def main():
         lakiernik1.work(lakiernik_queue, parking_type='lakiernik', tapicer_queue=tapicer_queue),
         elektromechanik1.work(elektromechanik_queue, parking_type='elektromechanik', wulkanizator_queue=wulkanizator_queue, lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
         wulkanizator1.work(wulkanizator_queue, parking_type='wulkanizator', lakiernik_queue=lakiernik_queue, tapicer_queue=tapicer_queue),
-        tapicer1.work(tapicer_queue, parking_type='tapicer')
+        tapicer1.work(tapicer_queue, parking_type='tapicer'),
+        monitor_queues(queues)
     )
     simulation_end_time = time()
 
@@ -400,6 +408,65 @@ async def main():
 
     plt.grid()
     plt.tight_layout()
+    plt.show()
+
+    # Średni czas przebywania klas w sieci
+    class_durations = {cls: [] for cls in ObjectClass}
+    for car in all_cars:
+        if car.delta_time:
+            class_durations[car.original_class].append(car.delta_time)
+
+    avg_durations = {cls: np.mean(times) if times else 0 for cls, times in class_durations.items()}
+
+    # Wykres
+    plt.figure(figsize=(10, 6))
+    plt.bar([str(cls) for cls in avg_durations.keys()], avg_durations.values(), color=['red', 'orange', 'green', 'pink'], edgecolor='black')
+    plt.xlabel('Class')
+    plt.ylabel('Mean Time (Hours)')
+    plt.title('Mean Time Spent By Each Class In The Network')
+    plt.grid(axis='y')
+    plt.show()
+
+async def monitor_queues(queues):
+    """Monitoruje liczbę oczekujących pojazdów i zapisuje dane do wykresu."""
+    queue_data = {name: [] for name in queues.keys()}  # Inicjalizacja pustych list
+    hours = []  # Lista przechowująca numery godzin
+    hour = 0  # Zmienna śledząca aktualną godzinę
+    
+    while hour <= 16:
+        await asyncio.sleep(1)  # Symulujemy przejście jednej godziny
+        
+        hours.append(hour)  # Dodajemy nową godzinę
+        for queue_name, queue in queues.items():
+            queue_length = queue.qsize()
+            queue_data[queue_name].append(queue_length)  # Zapisujemy stan kolejki
+        
+        if hour == 16:
+            plot_queue_status(hours, queue_data)
+            hour += 1
+        else:
+            hour += 1
+
+def plot_queue_status(hours, queue_data):
+    """Rysuje wykres słupkowy z nałożonymi na siebie wartościami (stacked bar chart)."""
+    plt.figure(figsize=(10, 6))
+    
+    systems = list(queue_data.keys())
+    data = np.array([queue_data[sys] for sys in systems])  # Konwersja na numpy array
+
+    colors = ["blue", "red", "green", "purple", "orange"]
+    
+    # Rysowanie wykresu jako stos słupków
+    bottom = np.zeros(len(hours))  # Początkowe wartości do nałożenia warstw
+    for i, (system, color) in enumerate(zip(systems, colors)):
+        plt.bar(hours, data[i], bottom=bottom, color=color, label=system)
+        bottom += data[i]  # Aktualizujemy dolną część dla następnej warstwy
+
+    plt.xticks(hours)
+    plt.xlabel("Hour")
+    plt.ylabel("Total Number of Waiting Cars")
+    plt.title("Queue Length Over Time")
+    plt.legend()
     plt.show()
 
 # Run the simulation
