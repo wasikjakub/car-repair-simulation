@@ -22,3 +22,8 @@ This project simulates a car repair queue system, where cars arrive at a garage,
 - Python 3.x
 - `matplotlib` for data visualization
 
+## Additional Authors
+
+Huge thanks for contributions for: 
+- @ttarnawski
+- @Mountaineye
